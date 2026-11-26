@@ -379,6 +379,7 @@ button { cursor: pointer; }
           <label for="f-cep">CEP</label>
           <input id="f-cep" name="cep" type="text" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000" aria-describedby="e-cep">
           <span class="err" id="e-cep" hidden>Informe um CEP com 8 números.</span>
+          <span class="a-note" id="cep-hint" hidden></span>
         </div>
         <div class="field">
           <label for="f-cidade">Cidade</label>
@@ -1532,6 +1533,37 @@ $("#form").addEventListener("input", function (e) {
   if (state.cart.length) $("#finish").href = waLink();
 });
 $("#form").addEventListener("submit", function (e) { e.preventDefault(); });
+/* CEP: preenche rua, bairro e cidade (ViaCEP) */
+var lastCep = "";
+function lookupCep() {
+  var cep = digits(fieldEl("cep").value);
+  if (cep.length !== 8 || cep === lastCep) return;
+  lastCep = cep;
+  var hint = $("#cep-hint");
+  hint.textContent = "Buscando endereço…";
+  hint.hidden = false;
+  fetch("https://viacep.com.br/ws/" + cep + "/json/")
+    .then(function (r) { if (!r.ok) throw new Error("http"); return r.json(); })
+    .then(function (d) {
+      if (digits(fieldEl("cep").value) !== cep) return;
+      if (d.erro) { hint.textContent = "CEP não encontrado. Preencha o endereço abaixo."; return; }
+      if (d.logradouro) fieldEl("rua").value = d.logradouro;
+      if (d.bairro) fieldEl("bairro").value = d.bairro;
+      if (d.localidade) fieldEl("cidade").value = d.localidade + (d.uf ? " - " + d.uf : "");
+      hint.hidden = true;
+      $("#form").dispatchEvent(new Event("input", { bubbles: true }));
+      fieldEl(d.logradouro ? "num" : "rua").focus();
+    })
+    .catch(function () {
+      lastCep = "";
+      hint.textContent = "Não foi possível buscar o CEP agora. Preencha o endereço abaixo.";
+    });
+}
+$("#f-cep").addEventListener("input", function () {
+  if (digits(this.value).length < 8) { lastCep = ""; $("#cep-hint").hidden = true; return; }
+  lookupCep();
+});
+
 
 /* ===== WHATSAPP ===== */
 function buildMessage() {
